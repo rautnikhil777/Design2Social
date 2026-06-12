@@ -11,7 +11,15 @@ const publishRoutes = require('./routes/publish');
 
 const app = express();
 
-app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173' }));
+// ✅ FIXED CORS FOR PRODUCTION + LOCAL BOTH
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'https://design2-social.vercel.app'
+  ],
+  credentials: true
+}));
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -42,4 +50,3 @@ app.use('/api/creative', creativeRoutes);
 app.use('/api/publish', publishRoutes);
 
 module.exports = app;
-
