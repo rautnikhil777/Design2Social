@@ -8,8 +8,10 @@ const generateRoutes = require('./routes/generate');
 const uploadRoutes = require('./routes/upload');
 const creativeRoutes = require('./routes/creative');
 const publishRoutes = require('./routes/publish');
+const aiRoutes = require('./routes/ai');
 
 const app = express();
+
 
 // ---------------- CORS (SAFE PRODUCTION VERSION) ----------------
 const allowedOrigins = [
@@ -66,5 +68,7 @@ app.use('/api/generate', generateRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/creative', creativeRoutes);
 app.use('/api/publish', publishRoutes);
+app.use('/api/ai', aiRoutes);
+
 
 module.exports = app;

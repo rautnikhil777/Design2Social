@@ -1,7 +1,5 @@
 # TODO
-
-- [ ] Update `backend/src/app.js` to use secure env-driven CORS (supports local + Vercel)
-- [ ] Add explicit OPTIONS handling for `/api/*` preflight requests
-- [ ] Ensure existing route registration stays unchanged
-- [ ] Redeploy backend and verify login from frontend (POST /api/auth/login)
+- [ ] Implement backend /api/ai/generate proxy that returns image bytes correctly and validates upstream JSON vs image.
+- [ ] Update frontend service to call backend endpoint and read response as blob, not JSON.
+- [ ] Update AIImageGenerator component to use the corrected service and show image from object URL.
 

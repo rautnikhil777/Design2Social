@@ -9,22 +9,90 @@ import PreviewPage from './pages/PreviewPage';
 import PublishPage from './pages/PublishPage';
 import ReelEditorPage from './pages/ReelEditorPage';
 
+function ProtectedRoute({ children }) {
+  const token = localStorage.getItem('token');
+  return token ? children : <Navigate to="/login" replace />;
+}
+
 export default function App() {
   const token = localStorage.getItem('token');
 
   return (
     <Routes>
-      <Route path="/" element={token ? <DashboardPage /> : <Navigate to="/login" replace />} />
+      <Route
+        path="/"
+        element={<Navigate to={token ? '/dashboard' : '/login'} replace />}
+      />
+
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/dashboard" element={token ? <DashboardPage /> : <Navigate to="/login" replace />} />
-      <Route path="/generate" element={token ? <GeneratePage /> : <Navigate to="/login" replace />} />
-      <Route path="/editor/flyer" element={token ? <FlyerEditorPage /> : <Navigate to="/login" replace />} />
-      <Route path="/editor/reel" element={token ? <ReelEditorPage /> : <Navigate to="/login" replace />} />
-      <Route path="/preview" element={token ? <PreviewPage /> : <Navigate to="/login" replace />} />
-      <Route path="/publish" element={token ? <PublishPage /> : <Navigate to="/login" replace />} />
-      <Route path="/history" element={token ? <HistoryPage /> : <Navigate to="/login" replace />} />
-      <Route path="*" element={<Navigate to={token ? '/dashboard' : '/login'} replace />} />
+
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <DashboardPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/generate"
+        element={
+          <ProtectedRoute>
+            <GeneratePage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/editor/flyer"
+        element={
+          <ProtectedRoute>
+            <FlyerEditorPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/editor/reel"
+        element={
+          <ProtectedRoute>
+            <ReelEditorPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/preview"
+        element={
+          <ProtectedRoute>
+            <PreviewPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/publish"
+        element={
+          <ProtectedRoute>
+            <PublishPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/history"
+        element={
+          <ProtectedRoute>
+            <HistoryPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="*"
+        element={<Navigate to={token ? '/dashboard' : '/login'} replace />}
+      />
     </Routes>
   );
 }
-

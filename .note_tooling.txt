@@ -1,0 +1,2 @@
+Tooling note: ripgrep binary not available in this environment, so search_files may fail. Proceed with direct targeted reads/edits of known relevant files.
+
