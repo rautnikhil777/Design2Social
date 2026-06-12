@@ -9,6 +9,9 @@ const uploadRoutes = require('./routes/upload');
 const creativeRoutes = require('./routes/creative');
 const publishRoutes = require('./routes/publish');
 const aiRoutes = require('./routes/ai');
+const aiBrandedRoutes = require('./routes/aiBranded');
+
+
 
 const app = express();
 
@@ -69,6 +72,6 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/creative', creativeRoutes);
 app.use('/api/publish', publishRoutes);
 app.use('/api/ai', aiRoutes);
-
+app.use('/api/ai', aiBrandedRoutes);
 
 module.exports = app;

@@ -1,11 +1,16 @@
 import { useEffect, useState } from 'react';
-import { generateAIImage } from '../services/aiImage';
+import { generateAIImage, generateBrandedAIImage } from '../services/aiImage';
 
 export default function AIImageGenerator({
   aiPrompt,
   setAiPrompt,
   generatedImage,
-  setGeneratedImage
+  setGeneratedImage,
+  // Branding inputs (MVP). If not provided, falls back to raw AI generation.
+  companyName,
+  quote,
+  brandColor,
+  logoUrl
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -31,9 +36,18 @@ export default function AIImageGenerator({
       setLoading(true);
       setError('');
 
-      const { imageUrl } = await generateAIImage(normalizedPrompt);
+      const wantsBranded = Boolean(logoUrl) && Boolean(companyName || quote || brandColor);
 
-      // Revoke previous blob url (if any) to avoid leaks.
+      const { imageUrl } = wantsBranded
+        ? await generateBrandedAIImage({
+            prompt: normalizedPrompt,
+            companyName,
+            quote,
+            brandColor,
+            logoUrl
+          })
+        : await generateAIImage(normalizedPrompt);
+
       if (generatedImage && generatedImage.startsWith('blob:')) {
         URL.revokeObjectURL(generatedImage);
       }
@@ -79,4 +93,6 @@ export default function AIImageGenerator({
     </div>
   );
 }
+
+
 

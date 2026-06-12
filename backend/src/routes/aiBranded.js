@@ -8,7 +8,6 @@ function timeoutPromise(ms) {
       clearTimeout(id);
       reject(new Error(`Upstream request timed out after ${ms}ms`));
     }, ms);
-    // NOTE: rejection clears automatically via clearTimeout
   });
 }
 
@@ -26,23 +25,21 @@ async function fetchAsBuffer(url) {
   return Buffer.from(arrayBuffer);
 }
 
-router.post('/generate', async (req, res) => {
-  const upstreamTimeoutMs = 30_000;
+router.post('/generate-branded', async (req, res) => {
+  const upstreamTimeoutMs = 60_000;
 
   try {
-    const { prompt } = req.body || {};
-    const normalizedPrompt = String(prompt || '').trim();
+    const { prompt, companyName, quote, brandColor, logoUrl } = req.body || {};
 
-    if (!normalizedPrompt) {
-      return res.status(400).json({ message: 'prompt is required' });
-    }
+    const normalizedPrompt = String(prompt || '').trim();
+    if (!normalizedPrompt) return res.status(400).json({ message: 'prompt is required' });
+    if (!logoUrl) return res.status(400).json({ message: 'logoUrl is required' });
 
     const apiKey = process.env.POLLINATIONS_API_KEY;
     if (!apiKey) {
       return res.status(500).json({ message: 'Missing Pollinations API key' });
     }
 
-    // Pollinations image endpoint returns image bytes.
     const upstreamUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(
       normalizedPrompt
     )}?model=flux`;
@@ -59,23 +56,17 @@ router.post('/generate', async (req, res) => {
 
     const contentType = upstreamRes.headers.get('content-type') || '';
 
-    // If upstream returns JSON (queue/rate-limit/errors), don't treat it as an image.
     if (contentType.includes('application/json')) {
       const json = await upstreamRes.json().catch(() => null);
-      const message =
-        json?.error || json?.message || 'Pollinations returned an error';
-
+      const message = json?.error || json?.message || 'Pollinations returned an error';
       return res.status(upstreamRes.status || 502).json({
         message,
-        upstream: {
-          contentType: contentType || undefined
-        },
+        upstream: { contentType: contentType || undefined },
         details: json
       });
     }
 
     if (!upstreamRes.ok) {
-      // Try to read as text for better debugging.
       const text = await upstreamRes.text().catch(() => '');
       return res.status(upstreamRes.status || 502).json({
         message: 'Pollinations request failed',
@@ -83,27 +74,31 @@ router.post('/generate', async (req, res) => {
       });
     }
 
-    // Stream-safe approach: read as arrayBuffer into a Buffer.
-    const arrayBuffer = await upstreamRes.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const bgArrayBuffer = await upstreamRes.arrayBuffer();
+    const backgroundBuffer = Buffer.from(bgArrayBuffer);
 
-    res.setHeader('Content-Type', contentType || 'image/png');
+    const { composeBrandedImage } = require('../services/brandImageComposerFixed');
+    const logoBuffer = await fetchAsBuffer(logoUrl);
+
+    const outputBuffer = await composeBrandedImage({
+      backgroundBuffer,
+      logoBuffer,
+      companyName,
+      quote,
+      brandColor
+    });
+
+    res.setHeader('Content-Type', 'image/png');
     res.setHeader('Cache-Control', 'no-store');
-    return res.send(buffer);
+    return res.send(outputBuffer);
   } catch (e) {
     const isTimeout = /timed out/i.test(e?.message || '');
     return res.status(isTimeout ? 504 : 500).json({
-      message: 'AI image generation error',
+      message: 'Branded AI image generation error',
       error: e?.message || 'unknown'
     });
   }
 });
 
 module.exports = router;
-
-
-
-
-
-
 

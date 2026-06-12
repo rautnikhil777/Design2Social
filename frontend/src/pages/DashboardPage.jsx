@@ -11,7 +11,8 @@ import PromptForm from '../components/PromptForm';
 import PublishStatus from '../components/PublishStatus';
 import QuoteEditor from '../components/QuoteEditor';
 
-import { generateAIImage } from '../services/aiImage';
+
+import { generateBrandedAIImage } from '../services/aiImage';
 import { setAuthToken } from '../services/apiClient';
 import { saveCreative } from '../services/creativeService';
 import { generateCreative } from '../services/generateService';
@@ -52,7 +53,10 @@ export default function DashboardPage() {
   const [aiImageLoaded, setAiImageLoaded] = useState(false);
 
   async function onGenerateAIImage() {
-  const promptToUse = (aiPrompt || prompt || '').trim();
+    const promptToUse = (aiPrompt || prompt || '').trim();
+
+
+
 
   if (!promptToUse) {
     setAiError('Please enter AI prompt first');
@@ -68,8 +72,15 @@ export default function DashboardPage() {
   setAiImageLoaded(false);
 
   try {
-    const data = await generateAIImage(promptToUse);
+    const data = await generateBrandedAIImage({
+      prompt: promptToUse,
+      companyName,
+      quote,
+      brandColor,
+      logoUrl
+    });
     const nextImage = data?.imageUrl || '';
+
 
     if (!nextImage) {
       throw new Error('AI image URL not returned');
@@ -303,8 +314,9 @@ export default function DashboardPage() {
                       onClick={onGenerateAIImage}
                       disabled={aiLoading}
                     >
-                      {aiLoading ? 'Generating...' : 'Generate AI Image'}
+                      {aiLoading ? 'Generating...' : 'Generate Branded AI Image'}
                     </button>
+
 
                     {aiError ? (
                       <div className="alert alert-warning mt-3 mb-0">
