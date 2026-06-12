@@ -43,6 +43,7 @@ app.use(
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
+
 app.use('/api/auth', authRoutes);
 app.use('/api/generate', generateRoutes);
 app.use('/api/upload', uploadRoutes);
