@@ -1,9 +1,10 @@
 # TODO
-- [ ] 1) Inspect relevant files for current branded generator implementation.
-- [ ] 2) Add missing `generateBrandedAIImage` to `frontend/src/services/aiImage.js`.
-- [ ] 3) Remove duplicated `/generate-branded` handler from `backend/src/routes/ai.js` (keep `aiBranded.js`).
-- [ ] 4) Verify frontend build.
-- [ ] 5) Verify backend run.
-- [ ] 6) Run shell-safe branded composer test for `/api/ai/generate-branded` with prompt containing `Book now!`.
-- [ ] 7) Report final changed files and test commands.
-
+- [ ] Edit `frontend/src/pages/DashboardPage.jsx` only
+  - [ ] Keep Publish button always rendered (remove conditional render wrapper)
+  - [ ] If no image: disable publish button + show message "Generate or select an image first"
+  - [ ] Replace direct Zapier fetch with `navigator.sendBeacon()` first, then fallback to `fetch(..., { mode: 'no-cors' })`
+  - [ ] Ensure payload shape: { imageUrl: generatedImageUrl, caption: publishCaption }
+  - [ ] Preserve existing loading states/text: Publishing..., Publish Success, Publish Failed
+  - [ ] Preserve Save / Download functionality exactly
+  - [ ] Reuse existing image detection logic (`generatedImageUrl`, `hasImage`, `publishCaption`)
+  - [ ] Minimal code changes

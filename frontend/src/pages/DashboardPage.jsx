@@ -242,6 +242,59 @@ export default function DashboardPage() {
   const isAiImage = !!aiImage && aiImage === generatedImageUrl;
   const publishCaption = isAiImage ? 'AI Generated Image' : 'Uploaded Image';
 
+  function isProbablyBlob(value) {
+    if (!value) return false;
+    return (
+      typeof Blob !== 'undefined' &&
+      value instanceof Blob
+    );
+  }
+
+  function isProbablyDataUrl(url) {
+    return typeof url === 'string' && /^data:image\//i.test(url);
+  }
+
+  async function blobToFile(blob, filename) {
+    if (!blob) return null;
+    const safeName = filename || 'image';
+    const ext = blob?.type?.split('/')?.[1] || 'png';
+    return new File([blob], `${safeName}.${ext}`, { type: blob.type || `image/${ext}` });
+  }
+
+  async function urlToFile(url, filename) {
+    if (!url || typeof url !== 'string') return null;
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return blobToFile(blob, filename);
+  }
+
+  async function uploadToCloudinaryUnsigned(file) {
+    const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+    const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+
+    // If config missing, keep existing behavior by throwing and letting caller fallback.
+    if (!cloudName || !uploadPreset) {
+      throw new Error('Missing Cloudinary env vars');
+    }
+
+    const endpoint = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', uploadPreset);
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!res.ok) {
+      throw new Error(`Cloudinary upload failed: ${res.status}`);
+    }
+
+    return await res.json();
+  }
+
   async function onPublishToSocial() {
     if (!ZAPIER_WEBHOOK_URL || ZAPIER_WEBHOOK_URL.includes('PASTE_YOUR_ZAPIER_URL_HERE')) return;
 
@@ -254,35 +307,69 @@ export default function DashboardPage() {
       return;
     }
 
+
     setPublishToSocialLoading(true);
+
+    // Default payload uses current generatedImageUrl; will be replaced with Cloudinary secure_url if possible.
     const payload = {
       imageUrl: generatedImageUrl,
       caption: publishCaption
     };
 
     try {
+      // Convert blob/preview/url -> File -> Cloudinary -> secure_url
+      let fileToUpload = null;
+
+      // Existing code currently stores aiImage as a URL; still support blob/data-url for requirement.
+      if (isProbablyBlob(aiImage)) {
+        fileToUpload = await blobToFile(aiImage, 'ai_generated');
+      } else if (isProbablyBlob(generatedImageUrl)) {
+        fileToUpload = await blobToFile(generatedImageUrl, 'ai_generated');
+      } else {
+        // generatedImageUrl may be URL (including data URL). Fetching will convert to Blob then File.
+        // Keep silent: any failure will fall back to original URL.
+        try {
+          fileToUpload = await urlToFile(generatedImageUrl, 'ai_generated');
+        } catch (_) {
+          fileToUpload = null;
+        }
+      }
+
+      if (fileToUpload) {
+        try {
+          const cloudRes = await uploadToCloudinaryUnsigned(fileToUpload);
+          const secureUrl = cloudRes?.secure_url;
+          if (secureUrl) {
+            payload.imageUrl = secureUrl;
+          } else {
+            throw new Error('Cloudinary response missing secure_url');
+          }
+        } catch (cloudErr) {
+          // Silent fallback to existing behavior.
+        }
+      }
+
       // Try beacon first to reduce CORS issues.
+      let sentOk = false;
       try {
         const ok = navigator.sendBeacon(ZAPIER_WEBHOOK_URL, JSON.stringify(payload));
-        if (ok) {
-          setPublishToSocialResult('success');
-          setPublishToSocialMessage('Publish Success');
-          return;
-        }
+        sentOk = !!ok;
       } catch (beaconErr) {
         // ignore and fallback to fetch
       }
 
-      const res = await fetch(ZAPIER_WEBHOOK_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
+      if (!sentOk) {
+        await fetch(ZAPIER_WEBHOOK_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+      }
 
-      // With no-cors, res.ok may be opaque; treat completion as success.
+      // With no-cors, fetch/sentBeacon may be opaque; treat completion as success.
       setPublishToSocialResult('success');
       setPublishToSocialMessage('Publish Success');
     } catch (e) {
