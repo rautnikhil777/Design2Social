@@ -19,6 +19,9 @@ import { generateCreative } from '../services/generateService';
 import { publishCreative } from '../services/publishService';
 import { uploadLogo } from '../services/uploadService';
 
+const ZAPIER_WEBHOOK_URL = import.meta.env.VITE_ZAPIER_WEBHOOK_URL || "";
+
+
 export default function DashboardPage() {
   const nav = useNavigate();
 
@@ -51,6 +54,14 @@ export default function DashboardPage() {
   const [aiImage, setAiImage] = useState(null);
   const [aiError, setAiError] = useState('');
   const [aiImageLoaded, setAiImageLoaded] = useState(false);
+
+  const [publishToSocialLoading, setPublishToSocialLoading] = useState(false);
+  const [publishToSocialResult, setPublishToSocialResult] = useState(null); // 'success' | 'failed' | null
+  const [publishToSocialMessage, setPublishToSocialMessage] = useState('');
+
+  const [downloadLoading, setDownloadLoading] = useState(false);
+  const [downloadResult, setDownloadResult] = useState(null); // 'success' | 'failed' | null
+  const [downloadMessage, setDownloadMessage] = useState('');
 
   async function onGenerateAIImage() {
     const promptToUse = (aiPrompt || prompt || '').trim();
@@ -223,6 +234,100 @@ export default function DashboardPage() {
       }
     : null;
 
+  // Detect currently available image to publish/download.
+  // - Prefer AI-generated image when present.
+  // - Otherwise fall back to selected template's preview URL when available.
+  const generatedImageUrl = aiImage || selected?.previewUrl || selected?.imageUrl || selected?.url || '';
+  const hasImage = !!generatedImageUrl;
+  const isAiImage = !!aiImage && aiImage === generatedImageUrl;
+  const publishCaption = isAiImage ? 'AI Generated Image' : 'Uploaded Image';
+
+  async function onPublishToSocial() {
+    if (!ZAPIER_WEBHOOK_URL || ZAPIER_WEBHOOK_URL.includes('PASTE_YOUR_ZAPIER_URL_HERE')) return;
+
+    setPublishToSocialResult(null);
+    setPublishToSocialMessage('');
+
+    // If no image is available, keep button disabled via `disabled` prop.
+    if (!hasImage) {
+      setPublishToSocialMessage('Generate or select an image first');
+      return;
+    }
+
+    setPublishToSocialLoading(true);
+    const payload = {
+      imageUrl: generatedImageUrl,
+      caption: publishCaption
+    };
+
+    try {
+      // Try beacon first to reduce CORS issues.
+      try {
+        const ok = navigator.sendBeacon(ZAPIER_WEBHOOK_URL, JSON.stringify(payload));
+        if (ok) {
+          setPublishToSocialResult('success');
+          setPublishToSocialMessage('Publish Success');
+          return;
+        }
+      } catch (beaconErr) {
+        // ignore and fallback to fetch
+      }
+
+      const res = await fetch(ZAPIER_WEBHOOK_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      // With no-cors, res.ok may be opaque; treat completion as success.
+      setPublishToSocialResult('success');
+      setPublishToSocialMessage('Publish Success');
+    } catch (e) {
+      console.error('[Zapier] publish error:', e);
+      setPublishToSocialResult('failed');
+      setPublishToSocialMessage('Publish Failed');
+    } finally {
+      setPublishToSocialLoading(false);
+    }
+  }
+
+
+  async function onDownloadImage() {
+    if (!hasImage) return;
+
+    setDownloadResult(null);
+    setDownloadMessage('');
+    setDownloadLoading(true);
+
+    try {
+      // Download directly in browser while preserving original quality.
+      const anchor = document.createElement('a');
+      anchor.href = generatedImageUrl;
+      const safeName = publishCaption.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_\-]/g, '');
+      anchor.download = `${safeName}.png`;
+      anchor.target = '_blank';
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+
+      setDownloadResult('success');
+      setDownloadMessage('Download Complete');
+    } catch (e) {
+      console.error('[Download] error:', e);
+      setDownloadResult('failed');
+      setDownloadMessage('Download Failed');
+    } finally {
+      setDownloadLoading(false);
+    }
+
+    if (!downloadResult) {
+      setDownloadMessage('Download Started');
+    }
+  }
+
   return (
     <div>
       <Navbar />
@@ -364,6 +469,57 @@ export default function DashboardPage() {
               </div>
             </div>
 
+            <div className="mt-3">
+              <div className="d-flex gap-2">
+                <button
+                  className="btn btn-primary flex-fill"
+                  onClick={onPublishToSocial}
+                  disabled={publishToSocialLoading || !hasImage || !ZAPIER_WEBHOOK_URL || ZAPIER_WEBHOOK_URL.includes('PASTE_YOUR_ZAPIER_URL_HERE')}
+                >
+                  {publishToSocialLoading ? 'Publishing...' : '📤 Publish to Social Media'}
+                </button>
+
+                <button
+                  className="btn btn-outline-success flex-fill"
+                  onClick={onDownloadImage}
+                  disabled={downloadLoading || !hasImage}
+                >
+                  {downloadLoading ? '💾 Saving...' : '💾 Save / Download Image'}
+                </button>
+              </div>
+
+              {publishToSocialMessage || (!hasImage ? 'Generate or select an image first' : '') ? (
+                <div
+                  className={
+                    publishToSocialResult === 'success'
+                      ? 'alert alert-success mt-2 mb-0'
+                      : publishToSocialResult === 'failed'
+                      ? 'alert alert-danger mt-2 mb-0'
+                      : 'alert alert-info mt-2 mb-0'
+                  }
+                  role="status"
+                >
+                  {publishToSocialMessage || (!hasImage ? 'Generate or select an image first' : '')}
+                </div>
+              ) : null}
+
+              {downloadMessage ? (
+                <div
+                  className={
+                    downloadResult === 'success'
+                      ? 'alert alert-success mt-2 mb-0'
+                      : downloadResult === 'failed'
+                      ? 'alert alert-danger mt-2 mb-0'
+                      : 'alert alert-info mt-2 mb-0'
+                  }
+                  role="status"
+                >
+                  {downloadMessage}
+                </div>
+              ) : null}
+            </div>
+
+
             <div className="d-flex gap-2 mt-3">
               <button
                 className="btn btn-outline-primary flex-fill"
@@ -389,3 +545,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
