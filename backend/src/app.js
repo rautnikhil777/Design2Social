@@ -10,10 +10,11 @@ const creativeRoutes = require('./routes/creative');
 const publishRoutes = require('./routes/publish');
 const aiRoutes = require('./routes/ai');
 const aiBrandedRoutes = require('./routes/aiBranded');
-
-
-
+const reelRoutes = require('./routes/reelRoutes');
+// NEW REEL FEATURE
 const app = express();
+
+
 
 
 // ---------------- CORS (SAFE PRODUCTION VERSION) ----------------
@@ -74,4 +75,8 @@ app.use('/api/publish', publishRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/ai', aiBrandedRoutes);
 
+// NEW REEL FEATURE
+app.use('/api/reel', reelRoutes);
+
 module.exports = app;
+

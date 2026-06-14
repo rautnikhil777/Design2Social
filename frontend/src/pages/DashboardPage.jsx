@@ -11,7 +11,6 @@ import PromptForm from '../components/PromptForm';
 import PublishStatus from '../components/PublishStatus';
 import QuoteEditor from '../components/QuoteEditor';
 
-
 import { generateBrandedAIImage } from '../services/aiImage';
 import { setAuthToken } from '../services/apiClient';
 import { saveCreative } from '../services/creativeService';
@@ -19,12 +18,13 @@ import { generateCreative } from '../services/generateService';
 import { publishCreative } from '../services/publishService';
 import { uploadLogo } from '../services/uploadService';
 
-const ZAPIER_WEBHOOK_URL = import.meta.env.VITE_ZAPIER_WEBHOOK_URL || "";
+// NEW REEL FEATURE
+import { generateReel, publishReel, uploadReel } from '../services/reelService.js';
 
+const ZAPIER_WEBHOOK_URL = import.meta.env.VITE_ZAPIER_WEBHOOK_URL || '';
 
 export default function DashboardPage() {
   const nav = useNavigate();
-
   const token = localStorage.getItem('token');
 
   useEffect(() => {
@@ -36,6 +36,11 @@ export default function DashboardPage() {
   const [businessType, setBusinessType] = useState('Clinic');
   const [contentType, setContentType] = useState('Flyer');
 
+  // NEW REEL FEATURE
+  const [reelLoading, setReelLoading] = useState(false);
+  const [reelError, setReelError] = useState('');
+  const [aiVideo, setAiVideo] = useState('');
+
   const [loadingGen, setLoadingGen] = useState(false);
   const [genResult, setGenResult] = useState(null);
   const [selected, setSelected] = useState(null);
@@ -45,6 +50,14 @@ export default function DashboardPage() {
   const [brandColor, setBrandColor] = useState('#0d6efd');
   const [logoUrl, setLogoUrl] = useState('');
   const [uploading, setUploading] = useState(false);
+
+  // NEW EXTRA INFO FOR NORMAL PREVIEW
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
+  const [website, setWebsite] = useState('');
+  const [ctaText, setCtaText] = useState('Book Now');
+  const [offerText, setOfferText] = useState('');
+  const [timing, setTiming] = useState('');
 
   const [saved, setSaved] = useState(null);
   const [publishLoading, setPublishLoading] = useState(false);
@@ -56,59 +69,56 @@ export default function DashboardPage() {
   const [aiImageLoaded, setAiImageLoaded] = useState(false);
 
   const [publishToSocialLoading, setPublishToSocialLoading] = useState(false);
-  const [publishToSocialResult, setPublishToSocialResult] = useState(null); // 'success' | 'failed' | null
+  const [publishToSocialResult, setPublishToSocialResult] = useState(null);
   const [publishToSocialMessage, setPublishToSocialMessage] = useState('');
 
   const [downloadLoading, setDownloadLoading] = useState(false);
-  const [downloadResult, setDownloadResult] = useState(null); // 'success' | 'failed' | null
+  const [downloadResult, setDownloadResult] = useState(null);
   const [downloadMessage, setDownloadMessage] = useState('');
 
   async function onGenerateAIImage() {
+    setReelError('');
+    setAiVideo('');
+
     const promptToUse = (aiPrompt || prompt || '').trim();
 
-
-
-
-  if (!promptToUse) {
-    setAiError('Please enter AI prompt first');
-    setAiImage('');
-    setAiImageLoaded(false);
-    return;
-  }
-
-  // clear old state
-  setAiError('');
-  setAiLoading(true);
-  setAiImage('');
-  setAiImageLoaded(false);
-
-  try {
-    const data = await generateBrandedAIImage({
-      prompt: promptToUse,
-      companyName,
-      quote,
-      brandColor,
-      logoUrl
-    });
-    const nextImage = data?.imageUrl || '';
-
-
-    if (!nextImage) {
-      throw new Error('AI image URL not returned');
+    if (!promptToUse) {
+      setAiError('Please enter AI prompt first');
+      setAiImage('');
+      setAiImageLoaded(false);
+      return;
     }
 
-    setAiImage(nextImage);
-  } catch (e) {
-    console.error('[AI] generateAIImage error:', e);
+    setAiError('');
+    setAiLoading(true);
     setAiImage('');
     setAiImageLoaded(false);
 
-    const msg = e?.message || 'AI generation failed';
-    setAiError(msg);
-  } finally {
-    setAiLoading(false);
+    try {
+      const data = await generateBrandedAIImage({
+        prompt: promptToUse,
+        companyName,
+        quote,
+        brandColor,
+        logoUrl
+      });
+
+      const nextImage = data?.imageUrl || '';
+
+      if (!nextImage) {
+        throw new Error('AI image URL not returned');
+      }
+
+      setAiImage(nextImage);
+    } catch (e) {
+      console.error('[AI] generateAIImage error:', e);
+      setAiImage('');
+      setAiImageLoaded(false);
+      setAiError(e?.message || 'AI generation failed');
+    } finally {
+      setAiLoading(false);
+    }
   }
-}
 
   async function onGenerate() {
     setLoadingGen(true);
@@ -139,24 +149,16 @@ export default function DashboardPage() {
 
     try {
       const data = await uploadLogo(file);
-
-      setLogoUrl(
-        data?.fullUrl ||
-          `http://localhost:4000${data?.logo || ''}`
-      );
+      setLogoUrl(data?.fullUrl || `http://localhost:4000${data?.logo || ''}`);
     } catch (e) {
-      alert(
-        e?.response?.data?.message ||
-          e.message ||
-          'Upload failed'
-      );
+      alert(e?.response?.data?.message || e.message || 'Upload failed');
     } finally {
       setUploading(false);
     }
   }
 
   async function onSaveAndNext() {
-    if (!selected) return;
+    if (!selected && !aiImage) return;
 
     setSaved(null);
     setPublishStatus(null);
@@ -164,9 +166,9 @@ export default function DashboardPage() {
     try {
       const data = await saveCreative({
         prompt,
-        type: selected.type,
+        type: selected?.type || contentType,
         quote,
-        template: selected.template
+        template: selected?.template || 'AI Generated'
       });
 
       setSaved(data.creative);
@@ -176,12 +178,18 @@ export default function DashboardPage() {
         JSON.stringify({
           creative: {
             ...data.creative,
-            aiImage
+            aiImage,
+            ctaText,
+            offerText
           },
           brand: {
             companyName,
             color: brandColor,
-            logoUrl
+            logoUrl,
+            phone,
+            address,
+            website,
+            timing
           }
         })
       );
@@ -216,38 +224,45 @@ export default function DashboardPage() {
   const brand = {
     companyName,
     color: brandColor,
-    logoUrl
+    logoUrl,
+    phone,
+    address,
+    website,
+    timing
   };
 
   const creative = selected
     ? {
         ...selected,
         quote,
-        aiImage
+        aiImage,
+        ctaText,
+        offerText
       }
     : aiImage
     ? {
         type: contentType,
         template: 'AI Generated',
         quote,
-        aiImage
+        aiImage,
+        ctaText,
+        offerText
       }
     : null;
 
-  // Detect currently available image to publish/download.
-  // - Prefer AI-generated image when present.
-  // - Otherwise fall back to selected template's preview URL when available.
-  const generatedImageUrl = aiImage || selected?.previewUrl || selected?.imageUrl || selected?.url || '';
+  const generatedImageUrl =
+    aiImage || selected?.previewUrl || selected?.imageUrl || selected?.url || '';
+
+  const generatedReelUrl = aiVideo || '';
   const hasImage = !!generatedImageUrl;
+  const hasReel = !!generatedReelUrl;
+
   const isAiImage = !!aiImage && aiImage === generatedImageUrl;
   const publishCaption = isAiImage ? 'AI Generated Image' : 'Uploaded Image';
 
   function isProbablyBlob(value) {
     if (!value) return false;
-    return (
-      typeof Blob !== 'undefined' &&
-      value instanceof Blob
-    );
+    return typeof Blob !== 'undefined' && value instanceof Blob;
   }
 
   function isProbablyDataUrl(url) {
@@ -272,7 +287,6 @@ export default function DashboardPage() {
     const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
     const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
-    // If config missing, keep existing behavior by throwing and letting caller fallback.
     if (!cloudName || !uploadPreset) {
       throw new Error('Missing Cloudinary env vars');
     }
@@ -301,33 +315,26 @@ export default function DashboardPage() {
     setPublishToSocialResult(null);
     setPublishToSocialMessage('');
 
-    // If no image is available, keep button disabled via `disabled` prop.
     if (!hasImage) {
       setPublishToSocialMessage('Generate or select an image first');
       return;
     }
 
-
     setPublishToSocialLoading(true);
 
-    // Default payload uses current generatedImageUrl; will be replaced with Cloudinary secure_url if possible.
     const payload = {
       imageUrl: generatedImageUrl,
       caption: publishCaption
     };
 
     try {
-      // Convert blob/preview/url -> File -> Cloudinary -> secure_url
       let fileToUpload = null;
 
-      // Existing code currently stores aiImage as a URL; still support blob/data-url for requirement.
       if (isProbablyBlob(aiImage)) {
         fileToUpload = await blobToFile(aiImage, 'ai_generated');
       } else if (isProbablyBlob(generatedImageUrl)) {
         fileToUpload = await blobToFile(generatedImageUrl, 'ai_generated');
       } else {
-        // generatedImageUrl may be URL (including data URL). Fetching will convert to Blob then File.
-        // Keep silent: any failure will fall back to original URL.
         try {
           fileToUpload = await urlToFile(generatedImageUrl, 'ai_generated');
         } catch (_) {
@@ -345,18 +352,15 @@ export default function DashboardPage() {
             throw new Error('Cloudinary response missing secure_url');
           }
         } catch (cloudErr) {
-          // Silent fallback to existing behavior.
+          // fallback silently
         }
       }
 
-      // Try beacon first to reduce CORS issues.
       let sentOk = false;
       try {
         const ok = navigator.sendBeacon(ZAPIER_WEBHOOK_URL, JSON.stringify(payload));
         sentOk = !!ok;
-      } catch (beaconErr) {
-        // ignore and fallback to fetch
-      }
+      } catch (beaconErr) {}
 
       if (!sentOk) {
         await fetch(ZAPIER_WEBHOOK_URL, {
@@ -369,7 +373,6 @@ export default function DashboardPage() {
         });
       }
 
-      // With no-cors, fetch/sentBeacon may be opaque; treat completion as success.
       setPublishToSocialResult('success');
       setPublishToSocialMessage('Publish Success');
     } catch (e) {
@@ -381,7 +384,6 @@ export default function DashboardPage() {
     }
   }
 
-
   async function onDownloadImage() {
     if (!hasImage) return;
 
@@ -390,7 +392,6 @@ export default function DashboardPage() {
     setDownloadLoading(true);
 
     try {
-      // Download directly in browser while preserving original quality.
       const anchor = document.createElement('a');
       anchor.href = generatedImageUrl;
       const safeName = publishCaption.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_\-]/g, '');
@@ -415,6 +416,42 @@ export default function DashboardPage() {
     }
   }
 
+  async function onGenerateReel() {
+    const promptToUse = (aiPrompt || prompt || '').trim();
+    if (!promptToUse) {
+      setReelError('Please enter AI prompt first');
+      return;
+    }
+
+    setReelError('');
+    setReelLoading(true);
+    setAiVideo('');
+
+    try {
+      const { videoUrl, caption } = await generateReel({
+        prompt: promptToUse,
+        caption: quote || ''
+      });
+
+      const uploadRes = await uploadReel({ videoUrl });
+      const secureUrl = uploadRes?.videoUrl;
+
+      if (!secureUrl) throw new Error('Cloudinary video URL not returned');
+
+      await publishReel({
+        videoUrl: secureUrl,
+        caption: caption || quote || 'AI Generated Reel'
+      });
+
+      setAiVideo(secureUrl);
+    } catch (e) {
+      console.error('[Reel] error:', e);
+      setReelError(e?.response?.data?.message || e?.message || 'Failed to generate reel');
+    } finally {
+      setReelLoading(false);
+    }
+  }
+
   return (
     <div>
       <Navbar />
@@ -432,9 +469,44 @@ export default function DashboardPage() {
               onGenerate={onGenerate}
             />
 
-            {loadingGen ? (
-              <div className="mt-3 alert alert-info">Generating...</div>
-            ) : null}
+            <div className="mt-3">
+              <div className="card shadow-sm">
+                <div className="card-body">
+                  <h5 className="card-title">Generate Type</h5>
+                  <div className="d-flex gap-2 mb-2">
+                    <button
+                      type="button"
+                      className={contentType === 'Flyer' ? 'btn btn-primary flex-fill' : 'btn btn-outline-primary flex-fill'}
+                      onClick={() => setContentType('Flyer')}
+                    >
+                      Image
+                    </button>
+                    <button
+                      type="button"
+                      className={contentType === 'Reel' ? 'btn btn-primary flex-fill' : 'btn btn-outline-primary flex-fill'}
+                      onClick={() => setContentType('Reel')}
+                    >
+                      Reel
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="btn btn-success w-100"
+                    disabled={reelLoading || contentType !== 'Reel'}
+                    onClick={onGenerateReel}
+                  >
+                    {reelLoading ? 'Generating Reel...' : 'Generate Reel'}
+                  </button>
+
+                  {reelError ? (
+                    <div className="alert alert-warning mt-3 mb-0">{reelError}</div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            {loadingGen ? <div className="mt-3 alert alert-info">Generating...</div> : null}
 
             {genResult ? (
               <div className="mt-3">
@@ -462,9 +534,74 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="mb-2">
-                    <BrandColorPicker
-                      color={brandColor}
-                      setColor={setBrandColor}
+                    <BrandColorPicker color={brandColor} setColor={setBrandColor} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3">
+              <div className="card shadow-sm">
+                <div className="card-body">
+                  <h5 className="card-title">Extra Information for Final Preview</h5>
+
+                  <div className="mb-2">
+                    <label className="form-label">Phone Number</label>
+                    <input
+                      className="form-control"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="+91 9876543210"
+                    />
+                  </div>
+
+                  <div className="mb-2">
+                    <label className="form-label">Address</label>
+                    <input
+                      className="form-control"
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      placeholder="Pimpri, Pune"
+                    />
+                  </div>
+
+                  <div className="mb-2">
+                    <label className="form-label">Website / Instagram</label>
+                    <input
+                      className="form-control"
+                      value={website}
+                      onChange={(e) => setWebsite(e.target.value)}
+                      placeholder="www.example.com / @yourbrand"
+                    />
+                  </div>
+
+                  <div className="mb-2">
+                    <label className="form-label">Offer Text</label>
+                    <input
+                      className="form-control"
+                      value={offerText}
+                      onChange={(e) => setOfferText(e.target.value)}
+                      placeholder="20% Off This Week"
+                    />
+                  </div>
+
+                  <div className="mb-2">
+                    <label className="form-label">CTA Button Text</label>
+                    <input
+                      className="form-control"
+                      value={ctaText}
+                      onChange={(e) => setCtaText(e.target.value)}
+                      placeholder="Book Now"
+                    />
+                  </div>
+
+                  <div className="mb-0">
+                    <label className="form-label">Business Timing</label>
+                    <input
+                      className="form-control"
+                      value={timing}
+                      onChange={(e) => setTiming(e.target.value)}
+                      placeholder="Mon - Sat, 10 AM - 8 PM"
                     />
                   </div>
                 </div>
@@ -504,20 +641,27 @@ export default function DashboardPage() {
                     <button
                       className="btn btn-primary w-100"
                       onClick={onGenerateAIImage}
-                      disabled={aiLoading}
+                      disabled={aiLoading || contentType !== 'Flyer'}
                     >
                       {aiLoading ? 'Generating...' : 'Generate Branded AI Image'}
                     </button>
 
-
                     {aiError ? (
-                      <div className="alert alert-warning mt-3 mb-0">
-                        {aiError}
-                      </div>
+                      <div className="alert alert-warning mt-3 mb-0">{aiError}</div>
                     ) : null}
 
                     <div className="mt-3">
-                      {aiImage ? (
+                      {contentType === 'Reel' ? (
+                        aiVideo ? (
+                          <video
+                            src={aiVideo}
+                            controls
+                            style={{ width: '100%', height: 220, objectFit: 'cover', borderRadius: 8 }}
+                          />
+                        ) : (
+                          <div className="text-muted small">AI Image preview will appear here.</div>
+                        )
+                      ) : aiImage ? (
                         <img
                           src={aiImage}
                           alt="AI generated"
@@ -530,15 +674,11 @@ export default function DashboardPage() {
                           onLoad={() => setAiImageLoaded(true)}
                           onError={() => {
                             setAiImageLoaded(false);
-                            setAiError(
-                              'Image failed to load. Please try again in a few seconds.'
-                            );
+                            setAiError('Image failed to load. Please try again in a few seconds.');
                           }}
                         />
                       ) : (
-                        <div className="text-muted small">
-                          AI image preview will appear here.
-                        </div>
+                        <div className="text-muted small">AI image preview will appear here.</div>
                       )}
 
                       {aiImage && !aiImageLoaded && !aiError ? (
@@ -561,7 +701,13 @@ export default function DashboardPage() {
                 <button
                   className="btn btn-primary flex-fill"
                   onClick={onPublishToSocial}
-                  disabled={publishToSocialLoading || !hasImage || !ZAPIER_WEBHOOK_URL || ZAPIER_WEBHOOK_URL.includes('PASTE_YOUR_ZAPIER_URL_HERE')}
+                  disabled={
+                    contentType !== 'Flyer' ||
+                    publishToSocialLoading ||
+                    !hasImage ||
+                    !ZAPIER_WEBHOOK_URL ||
+                    ZAPIER_WEBHOOK_URL.includes('PASTE_YOUR_ZAPIER_URL_HERE')
+                  }
                 >
                   {publishToSocialLoading ? 'Publishing...' : '📤 Publish to Social Media'}
                 </button>
@@ -569,7 +715,7 @@ export default function DashboardPage() {
                 <button
                   className="btn btn-outline-success flex-fill"
                   onClick={onDownloadImage}
-                  disabled={downloadLoading || !hasImage}
+                  disabled={contentType !== 'Flyer' || downloadLoading || !hasImage}
                 >
                   {downloadLoading ? '💾 Saving...' : '💾 Save / Download Image'}
                 </button>
@@ -606,7 +752,6 @@ export default function DashboardPage() {
               ) : null}
             </div>
 
-
             <div className="d-flex gap-2 mt-3">
               <button
                 className="btn btn-outline-primary flex-fill"
@@ -632,4 +777,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
