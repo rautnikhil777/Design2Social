@@ -9,6 +9,8 @@ import PreviewPage from './pages/PreviewPage';
 import PublishPage from './pages/PublishPage';
 import ReelEditorPage from './pages/ReelEditorPage';
 
+import { setAuthToken } from './services/apiClient';
+
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem('token');
   return token ? children : <Navigate to="/login" replace />;
@@ -16,6 +18,9 @@ function ProtectedRoute({ children }) {
 
 export default function App() {
   const token = localStorage.getItem('token');
+
+  // Ensure axios apiClient sends Authorization header for protected reel endpoints.
+  if (token) setAuthToken(token);
 
   return (
     <Routes>

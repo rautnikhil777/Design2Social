@@ -4,14 +4,34 @@ export default function PreviewCard({ creative, brand }) {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  const { type, template, quote, aiImage, offerText, ctaText } = creative || {};
+  const { type, template, quote, aiImage, offerText, ctaText, aiVideo } = creative || {};
   const { companyName, color, logoUrl, phone, address, website, timing } = brand || {};
 
   const imageSrc = (aiImage || template || '').trim();
+  const normalizedAiVideo = (aiVideo || '').toString().trim();
+  const videoSrc = (normalizedAiVideo || template || '').trim();
 
-  const showImage = type === 'Flyer' && !!imageSrc;
+  // Reel detection: prefer explicit type, creative type, or presence of aiVideo
+  const isReelMode =
+    type === 'Reel' ||
+    creative?.type === 'Reel' ||
+    !!normalizedAiVideo;
+
+  // If aiVideo exists in Reel mode, never let template/image preview URLs override it
+  const finalVideoSrc = (isReelMode && normalizedAiVideo
+    ? normalizedAiVideo
+    : (normalizedAiVideo || creative?.videoUrl || videoSrc || '').toString().trim());
+
+  const showImage = !isReelMode && type === 'Flyer' && !!imageSrc;
+  const showVideo = isReelMode && !!finalVideoSrc;
   const isAiPreview = !!aiImage?.trim() && imageSrc === aiImage;
   const isTemplatePreview = !!template?.trim() && !isAiPreview;
+
+  if (import.meta.env.DEV) {
+    console.debug('[PreviewCard] selected object/type', { type, creativeType: creative?.type });
+    console.debug('[PreviewCard] aiVideo', normalizedAiVideo);
+    console.debug('[PreviewCard] final videoSrc', finalVideoSrc);
+  }
 
   const showOffer = isTemplatePreview && !!offerText?.trim();
   const showPhone = isTemplatePreview && !!phone?.trim();
@@ -450,6 +470,36 @@ export default function PreviewCard({ creative, brand }) {
     );
   }
 
+  function renderVideoContent(height = 340, isModal = false) {
+    return (
+      <div style={{ position: 'relative', minHeight: isModal ? '70vh' : 320, background: '#000' }}>
+        <video
+          // key on src prevents stale playback; no manual play()/pause() to avoid AbortError
+          key={finalVideoSrc}
+          src={finalVideoSrc}
+          controls
+          playsInline
+          muted
+          preload="metadata"
+          style={{
+            width: '100%',
+            height: isModal ? '90vh' : height,
+            objectFit: 'contain',
+            display: 'block',
+            background: '#000'
+          }}
+          onLoadedMetadata={() => {
+            if (import.meta.env.DEV) console.debug('[Reel Preview] metadata loaded');
+          }}
+          onError={(e) => {
+            if (import.meta.env.DEV) console.debug('[Reel Preview] video error', e);
+          }}
+        />
+      </div>
+    );
+  }
+
+
   return (
     <>
       <div className="card shadow-sm">
@@ -461,6 +511,8 @@ export default function PreviewCard({ creative, brand }) {
                 <small className="text-muted">
                   {isAiPreview ? 'AI image preview' : 'Template image preview'}
                 </small>
+              ) : showVideo ? (
+                <small className="text-muted">Reel video preview</small>
               ) : null}
             </div>
 
@@ -492,6 +544,25 @@ export default function PreviewCard({ creative, brand }) {
                   style={{ height: 340, background: '#eef1f4' }}
                 >
                   Flyer preview will appear here
+                </div>
+              )
+            ) : type === 'Reel' ? (
+              showVideo ? (
+                renderVideoContent(340, false)
+              ) : (
+                <div
+                  className="d-flex align-items-center justify-content-center flex-column text-center p-4"
+                  style={{
+                    height: 340,
+                    background: `linear-gradient(135deg, ${color || '#0d6efd'}22, #ffffff)`
+                  }}
+                >
+                  <div className="fw-bold mb-2" style={{ fontSize: 20 }}>
+                    Reel Preview
+                  </div>
+                  <div className="text-muted" style={{ maxWidth: 260 }}>
+                    Reel preview will appear here.
+                  </div>
                 </div>
               )
             ) : (

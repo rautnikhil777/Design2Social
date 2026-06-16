@@ -1,0 +1,4 @@
+Temporary debug artifacts:
+- Added console logging + debug UI for aiVideo playback events in DashboardPage.jsx
+Remove this file once done.
+

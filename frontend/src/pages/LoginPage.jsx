@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { setAuthToken } from '../services/apiClient';
 import { login, signup } from '../services/authService';
 
+
 export default function LoginPage() {
   const nav = useNavigate();
   const [mode, setMode] = useState('login');

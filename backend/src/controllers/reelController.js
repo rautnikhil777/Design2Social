@@ -26,6 +26,10 @@ const reelController = {
 
       return res.json({ videoUrl, caption: generatedCaption || caption || '' });
     } catch (e) {
+      console.error('[REEL][controller] generateReel failed');
+      console.error('[REEL][controller] message:', e?.message);
+      console.error('[REEL][controller] stack:', e?.stack);
+      console.error('[REEL][controller] error:', e);
       return safeError(res, 500, 'Reel generation failed', e);
     }
   },
@@ -45,6 +49,10 @@ const reelController = {
         createdAt: upload.createdAt
       });
     } catch (e) {
+      console.error('[REEL][controller] uploadReel failed');
+      console.error('[REEL][controller] message:', e?.message);
+      console.error('[REEL][controller] stack:', e?.stack);
+      console.error('[REEL][controller] error:', e);
       return safeError(res, 500, 'Reel upload failed', e);
     }
   },
@@ -82,6 +90,10 @@ const reelController = {
 
       return safeError(res, 502, 'Reel publish failed after retries', lastErr);
     } catch (e) {
+      console.error('[REEL][controller] publishReel failed');
+      console.error('[REEL][controller] message:', e?.message);
+      console.error('[REEL][controller] stack:', e?.stack);
+      console.error('[REEL][controller] error:', e);
       return safeError(res, 500, 'Reel publish failed', e);
     }
   }

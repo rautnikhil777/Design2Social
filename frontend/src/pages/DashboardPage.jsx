@@ -19,7 +19,9 @@ import { publishCreative } from '../services/publishService';
 import { uploadLogo } from '../services/uploadService';
 
 // NEW REEL FEATURE
-import { generateReel, publishReel, uploadReel } from '../services/reelService.js';
+import { generateReel } from '../services/reelService.js';
+
+// NOTE: Pollinations-only reel flow (no Cloudinary upload, no publish/post)
 
 const ZAPIER_WEBHOOK_URL = import.meta.env.VITE_ZAPIER_WEBHOOK_URL || '';
 
@@ -158,7 +160,7 @@ export default function DashboardPage() {
   }
 
   async function onSaveAndNext() {
-    if (!selected && !aiImage) return;
+    if (!selected && !aiImage && !aiVideo) return;
 
     setSaved(null);
     setPublishStatus(null);
@@ -179,6 +181,7 @@ export default function DashboardPage() {
           creative: {
             ...data.creative,
             aiImage,
+            aiVideo,
             ctaText,
             offerText
           },
@@ -236,15 +239,17 @@ export default function DashboardPage() {
         ...selected,
         quote,
         aiImage,
+        aiVideo,
         ctaText,
         offerText
       }
-    : aiImage
+    : aiImage || aiVideo
     ? {
         type: contentType,
         template: 'AI Generated',
         quote,
         aiImage,
+        aiVideo,
         ctaText,
         offerText
       }
@@ -267,6 +272,16 @@ export default function DashboardPage() {
 
   function isProbablyDataUrl(url) {
     return typeof url === 'string' && /^data:image\//i.test(url);
+  }
+
+  function isVideoAssetUrl(url) {
+    if (typeof url !== 'string') return false;
+    return /\/video\/upload\//i.test(url) || /\.(mp4|webm|mov)(\?|$)/i.test(url);
+  }
+
+  function isImageAssetUrl(url) {
+    if (typeof url !== 'string') return false;
+    return /\/image\/upload\//i.test(url) || /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(url);
   }
 
   async function blobToFile(blob, filename) {
@@ -426,24 +441,22 @@ export default function DashboardPage() {
     setReelError('');
     setReelLoading(true);
     setAiVideo('');
+    setAiImage('');
 
     try {
-      const { videoUrl, caption } = await generateReel({
+      const response = await generateReel({
         prompt: promptToUse,
         caption: quote || ''
       });
 
-      const uploadRes = await uploadReel({ videoUrl });
-      const secureUrl = uploadRes?.videoUrl;
+      console.debug('[Reel] generateReel full response:', response);
 
-      if (!secureUrl) throw new Error('Cloudinary video URL not returned');
+      const videoUrl = response?.videoUrl;
+      console.debug('[Reel] extracted videoUrl:', { videoUrlType: typeof videoUrl, isNonEmptyString: typeof videoUrl === 'string' && videoUrl.length > 0 });
 
-      await publishReel({
-        videoUrl: secureUrl,
-        caption: caption || quote || 'AI Generated Reel'
-      });
+      if (!videoUrl) throw new Error('Reel videoUrl not returned');
 
-      setAiVideo(secureUrl);
+      setAiVideo(videoUrl);
     } catch (e) {
       console.error('[Reel] error:', e);
       setReelError(e?.response?.data?.message || e?.message || 'Failed to generate reel');
@@ -653,13 +666,64 @@ export default function DashboardPage() {
                     <div className="mt-3">
                       {contentType === 'Reel' ? (
                         aiVideo ? (
-                          <video
-                            src={aiVideo}
-                            controls
-                            style={{ width: '100%', height: 220, objectFit: 'cover', borderRadius: 8 }}
-                          />
+                          <div style={{ marginTop: 8 }}>
+                            <div className="small text-muted" style={{ marginBottom: 8, wordBreak: 'break-word' }}>
+                              <div><strong>aiVideo:</strong> {aiVideo ? 'non-empty' : 'empty'}</div>
+                              <div><strong>aiVideo length:</strong> {typeof aiVideo === 'string' ? aiVideo.length : 'n/a'}</div>
+                              <div><strong>aiVideo (head):</strong> {typeof aiVideo === 'string' ? aiVideo.slice(0, 120) : 'n/a'}</div>
+                              <div><strong>preview type:</strong> {isVideoAssetUrl(aiVideo) ? 'video' : isImageAssetUrl(aiVideo) ? 'image' : 'unknown'}</div>
+                            </div>
+
+                            {isVideoAssetUrl(aiVideo) ? (
+                              <video
+                                key={aiVideo}
+                                src={aiVideo}
+                                controls
+                                muted
+                                playsInline
+                                preload="metadata"
+                                style={{ width: '100%', height: 220, objectFit: 'cover', borderRadius: 8 }}
+                                onLoadStart={() => {
+                                  console.debug('[Reel Preview] onLoadStart');
+                                }}
+                                onLoadedMetadata={(e) => {
+                                  console.debug('[Reel Preview] onLoadedMetadata', {
+                                    duration: e?.currentTarget?.duration,
+                                    videoWidth: e?.currentTarget?.videoWidth,
+                                    videoHeight: e?.currentTarget?.videoHeight
+                                  });
+                                }}
+                                onCanPlay={() => {
+                                  console.debug('[Reel Preview] onCanPlay');
+                                }}
+                                onError={(e) => {
+                                  console.debug('[Reel Preview] onError', {
+                                    error: e?.currentTarget?.error,
+                                    networkState: e?.currentTarget?.networkState,
+                                    readyState: e?.currentTarget?.readyState
+                                  });
+                                }}
+                                onStalled={() => {
+                                  console.debug('[Reel Preview] onStalled');
+                                }}
+                              />
+                            ) : isImageAssetUrl(aiVideo) ? (
+                              <img
+                                src={aiVideo}
+                                alt="Generated reel creative"
+                                style={{
+                                  width: '100%',
+                                  height: 220,
+                                  objectFit: 'cover',
+                                  borderRadius: 8
+                                }}
+                              />
+                            ) : (
+                              <div className="text-muted small">Unsupported reel media type.</div>
+                            )}
+                          </div>
                         ) : (
-                          <div className="text-muted small">AI Image preview will appear here.</div>
+                          <div className="text-muted small">AI reel preview will appear here.</div>
                         )
                       ) : aiImage ? (
                         <img
@@ -756,7 +820,7 @@ export default function DashboardPage() {
               <button
                 className="btn btn-outline-primary flex-fill"
                 onClick={onSaveAndNext}
-                disabled={!selected && !aiImage}
+                disabled={!selected && !aiImage && !aiVideo}
               >
                 Save & Preview
               </button>
